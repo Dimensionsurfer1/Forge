@@ -1,0 +1,29 @@
+app:
+  name: Forge
+  version: 0.1.0
+  environment: development
+
+execution:
+  max_parallel_agents: 3
+  max_retries: 2
+  require_approval_for:
+    - architecture_changes
+    - dependency_changes
+    - main_branch_merge
+    - final_release
+
+models:
+  default_provider: openrouter
+  local_provider: ollama
+  routing_strategy: dynamic
+  fallback_enabled: true
+
+storage:
+  database: runtime/database/forge.db
+  logs: runtime/logs
+  projects: projects
+
+integrations:
+  graphify:
+    enabled: false
+    optional: true

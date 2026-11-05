@@ -1,0 +1,59 @@
+@'
+# Python environments
+.venv/
+venv/
+env/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+runtime/logs/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+runtime/database/
+
+# Temporary files
+tmp/
+temp/
+.cache/
+*.tmp
+*.bak
+
+# Build outputs
+build/
+dist/
+
+# Agent-generated temporary work
+.worktrees/
+'@ | Set-Content -Encoding utf8 .gitignore

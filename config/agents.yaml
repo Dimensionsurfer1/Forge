@@ -1,0 +1,72 @@
+﻿agents:
+  - id: orchestrator
+    name: Orchestrator
+    role: workflow_manager
+    description: Manages workflows, assigns tasks, and tracks progress.
+    default_model: auto
+    skills: [coordination, model_routing]
+    enabled: true
+
+  - id: planner
+    name: Planner
+    role: task_planning
+    description: Converts project requirements into clear tasks.
+    default_model: auto
+    skills: [planning, requirements]
+    enabled: true
+
+  - id: architect
+    name: Architect
+    role: system_design
+    description: Designs system architecture and technical interfaces.
+    default_model: auto
+    skills: [architecture, api_design]
+    enabled: true
+
+  - id: frontend
+    name: Frontend Developer
+    role: frontend_development
+    description: Builds frontend components and user interfaces.
+    default_model: auto
+    skills: [react, typescript, ui_testing]
+    enabled: true
+
+  - id: backend
+    name: Backend Developer
+    role: backend_development
+    description: Builds APIs, databases, and backend services.
+    default_model: auto
+    skills: [python, fastapi, databases]
+    enabled: true
+
+  - id: audio
+    name: Audio Engineer
+    role: audio_engineering
+    description: Handles audio processing, transcription, and streaming.
+    default_model: auto
+    skills: [audio, transcription, streaming]
+    enabled: true
+
+  - id: qa
+    name: QA Engineer
+    role: quality_assurance
+    description: Tests features and identifies defects.
+    default_model: auto
+    skills: [testing, debugging]
+    enabled: true
+
+  - id: reviewer
+    name: Code Reviewer
+    role: code_review
+    description: Reviews code for quality, security, and performance.
+    default_model: auto
+    skills: [code_review, security]
+    enabled: true
+
+  - id: integrator
+    name: Integrator
+    role: integration
+    description: Integrates completed work and verifies compatibility.
+    default_model: auto
+    skills: [git, integration_testing]
+    enabled: true
