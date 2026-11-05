@@ -1,0 +1,51 @@
+﻿providers:
+  openrouter:
+    enabled: true
+    type: cloud
+    api_key_env: OPENROUTER_API_KEY
+
+  ollama:
+    enabled: true
+    type: local
+    api_base: http://localhost:11434
+
+models:
+  local_qwen:
+    provider: ollama
+    litellm_model: ollama_chat/qwen2.5:latest
+    context_window: 4096
+    capabilities:
+      - general
+      - basic_coding
+      - summarization
+    cost_tier: free
+
+  cloud_coding:
+    provider: openrouter
+    litellm_model_env: FORGE_CLOUD_CODING_MODEL
+    capabilities:
+      - advanced_coding
+      - debugging
+      - architecture
+      - reasoning
+    cost_tier: variable
+
+routing:
+  strategy: balanced
+  default_model: cloud_coding
+  local_fallback: local_qwen
+
+  escalation:
+    enabled: true
+    max_attempts: 2
+
+  rules:
+    simple_tasks: local_qwen
+    software_development: cloud_coding
+    architecture: cloud_coding
+    code_review: cloud_coding
+
+  local_execution:
+    max_parallel_requests: 1
+    preferred_context_window: 4096
+
