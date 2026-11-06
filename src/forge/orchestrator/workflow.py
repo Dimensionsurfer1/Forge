@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from forge.core.state import WorkflowState
 from forge.model_router import ModelRouter
+from forge.orchestrator.executor import AgentExecutor
 from forge.orchestrator.planner import create_plan
 from forge.orchestrator.scheduler import build_execution_batches
 
@@ -33,7 +34,11 @@ def load_parallel_limit() -> int:
         "max_parallel_agents", 3
     )
 
-    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+    if (
+        not isinstance(limit, int)
+        or isinstance(limit, bool)
+        or limit < 1
+    ):
         raise ValueError(
             "execution.max_parallel_agents must be a positive integer."
         )
@@ -43,9 +48,11 @@ def load_parallel_limit() -> int:
 
 def build_workflow(
     router: ModelRouter | None = None,
+    *,
+    executor: AgentExecutor,
     max_parallel_agents: int | None = None,
 ):
-    """Build the planning and scheduling workflow."""
+    """Build the planning, scheduling and execution workflow."""
 
     model_router = router or ModelRouter()
 
@@ -55,8 +62,17 @@ def build_workflow(
         else load_parallel_limit()
     )
 
-    if parallel_limit < 1:
-        raise ValueError("max_parallel_agents must be at least 1.")
+    if (
+        not isinstance(parallel_limit, int)
+        or isinstance(parallel_limit, bool)
+        or parallel_limit < 1
+    ):
+        raise ValueError("max_parallel_agents must be a positive integer.")
+
+    if executor.max_parallel_agents != parallel_limit:
+        raise ValueError(
+            "Scheduler and AgentExecutor parallel limits must match."
+        )
 
     graph = StateGraph(WorkflowState)
 
@@ -82,11 +98,41 @@ def build_workflow(
             ],
         }
 
+    def execute_tasks(state: WorkflowState) -> dict:
+        results = executor.execute_batches(
+            state["execution_batches"]
+        )
+
+        failed = any(
+            result["status"] == "failed"
+            for result in results
+        )
+
+        completed = sum(
+            result["status"] == "completed"
+            for result in results
+        )
+
+        return {
+            "execution_results": results,
+            "status": "failed" if failed else "completed",
+            "events": [
+                f"Execution finished: {completed} tasks completed.",
+                (
+                    "One or more tasks failed."
+                    if failed
+                    else "All scheduled tasks completed."
+                ),
+            ],
+        }
+
     graph.add_node("scheduler", schedule_tasks)
+    graph.add_node("executor", execute_tasks)
 
     graph.add_edge(START, "initialize")
     graph.add_edge("initialize", "planner")
     graph.add_edge("planner", "scheduler")
-    graph.add_edge("scheduler", END)
+    graph.add_edge("scheduler", "executor")
+    graph.add_edge("executor", END)
 
     return graph.compile()

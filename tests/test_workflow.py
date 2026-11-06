@@ -1,14 +1,15 @@
 
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from forge.core.state import create_workflow_state
+from forge.orchestrator.executor import AgentExecutor
 from forge.orchestrator.workflow import build_workflow
 
 
-def test_workflow_calls_planner_and_scheduler():
+def test_workflow_plans_schedules_and_executes():
     router = MagicMock()
-
     router.select_model.return_value = "local_qwen"
 
     router.chat.return_value = json.dumps({
@@ -33,8 +34,21 @@ def test_workflow_calls_planner_and_scheduler():
         ],
     })
 
+    registry = MagicMock()
+    registry.get.return_value = SimpleNamespace(enabled=True)
+
+    executor = AgentExecutor(
+        registry=registry,
+        handlers={
+            "architect": lambda task: "Mock architecture completed.",
+            "backend": lambda task: "Mock backend completed.",
+        },
+        max_parallel_agents=3,
+    )
+
     workflow = build_workflow(
         router,
+        executor=executor,
         max_parallel_agents=3,
     )
 
@@ -46,14 +60,19 @@ def test_workflow_calls_planner_and_scheduler():
 
     result = workflow.invoke(initial_state)
 
-    assert result["status"] == "scheduled"
+    assert result["status"] == "completed"
+
     assert len(result["tasks"]) == 2
     assert len(result["execution_batches"]) == 2
+    assert len(result["execution_results"]) == 2
 
-    first_batch = result["execution_batches"][0]
-    second_batch = result["execution_batches"][1]
+    assert all(
+        item["status"] == "completed"
+        for item in result["execution_results"]
+    )
 
-    assert first_batch[0]["task_id"] == "T1"
-    assert second_batch[0]["task_id"] == "T2"
+    assert result["execution_results"][0]["output"] == (
+        "Mock architecture completed."
+    )
 
     router.chat.assert_called_once()
