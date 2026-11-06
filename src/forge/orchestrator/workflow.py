@@ -5,6 +5,8 @@ from typing import Any
 import yaml
 from langgraph.graph import END, START, StateGraph
 
+from forge.agents.factory import build_agent_handlers
+from forge.agents.registry import AgentRegistry
 from forge.core.state import WorkflowState
 from forge.model_router import ModelRouter
 from forge.orchestrator.executor import AgentExecutor
@@ -13,7 +15,6 @@ from forge.orchestrator.scheduler import build_execution_batches
 
 
 def initialize_workflow(state: WorkflowState) -> dict:
-    """Initialize a workflow and record its start."""
     return {
         "status": "running",
         "events": [
@@ -23,7 +24,6 @@ def initialize_workflow(state: WorkflowState) -> dict:
 
 
 def load_parallel_limit() -> int:
-    """Read the parallel-agent limit from Forge configuration."""
     project_root = Path(__file__).resolve().parents[3]
     config_path = project_root / "config" / "forge.yaml"
 
@@ -49,7 +49,8 @@ def load_parallel_limit() -> int:
 def build_workflow(
     router: ModelRouter | None = None,
     *,
-    executor: AgentExecutor,
+    executor: AgentExecutor | None = None,
+    registry: AgentRegistry | None = None,
     max_parallel_agents: int | None = None,
 ):
     """Build the planning, scheduling and execution workflow."""
@@ -68,6 +69,17 @@ def build_workflow(
         or parallel_limit < 1
     ):
         raise ValueError("max_parallel_agents must be a positive integer.")
+
+    if executor is None:
+        agent_registry = (
+            registry if registry is not None else AgentRegistry()
+        )
+
+        executor = AgentExecutor(
+            registry=agent_registry,
+            handlers=build_agent_handlers(model_router),
+            max_parallel_agents=parallel_limit,
+        )
 
     if executor.max_parallel_agents != parallel_limit:
         raise ValueError(
