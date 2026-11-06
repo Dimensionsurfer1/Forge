@@ -51,6 +51,8 @@ def build_workflow(
     *,
     executor: AgentExecutor | None = None,
     registry: AgentRegistry | None = None,
+    projects_root: str | Path | None = None,
+    allow_file_writes: bool = False,
     max_parallel_agents: int | None = None,
 ):
     """Build the planning, scheduling and execution workflow."""
@@ -71,20 +73,28 @@ def build_workflow(
         raise ValueError("max_parallel_agents must be a positive integer.")
 
     if executor is None:
+        project_root = Path(__file__).resolve().parents[3]
+
+        workspace_root = (
+            Path(projects_root)
+            if projects_root is not None
+            else project_root / "projects"
+        )
+
         agent_registry = (
             registry if registry is not None else AgentRegistry()
         )
 
         executor = AgentExecutor(
             registry=agent_registry,
-            handlers=build_agent_handlers(model_router),
+            handlers=build_agent_handlers(
+                model_router,
+                projects_root=workspace_root,
+                allow_file_writes=allow_file_writes,
+            ),
             max_parallel_agents=parallel_limit,
         )
 
-    if executor.max_parallel_agents != parallel_limit:
-        raise ValueError(
-            "Scheduler and AgentExecutor parallel limits must match."
-        )
 
     graph = StateGraph(WorkflowState)
 
@@ -111,9 +121,20 @@ def build_workflow(
         }
 
     def execute_tasks(state: WorkflowState) -> dict:
-        results = executor.execute_batches(
-            state["execution_batches"]
-        )
+        # Attach the project ID to every task.
+        execution_batches = [
+            [
+                {
+                    **task,
+                    "project_id": state["project_id"],
+                }
+                for task in batch
+            ]
+            for batch in state["execution_batches"]
+        ]
+
+        # Execute the prepared batches.
+        results = executor.execute_batches(execution_batches)
 
         failed = any(
             result["status"] == "failed"

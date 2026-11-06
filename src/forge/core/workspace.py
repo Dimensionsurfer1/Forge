@@ -262,3 +262,12 @@ class ProjectWorkspace:
                     return sorted(results)
 
         return sorted(results)
+
+    def validate_file_path(self, relative_path: PathInput) -> Path:
+        """Validate a proposed file path without modifying it."""
+        path = self._resolve(relative_path)
+
+        if path.exists() and not path.is_file():
+            raise WorkspaceError("Target path is not a regular file.")
+
+        return path

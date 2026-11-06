@@ -111,8 +111,14 @@ def test_workflow_automatically_builds_specialist_agents():
                 },
             ],
         }),
-        "Architecture design completed.",
-        "Backend implementation prepared.",
+        json.dumps({
+            "summary": "Architecture design completed.",
+            "file_changes": [],
+        }),
+        json.dumps({
+            "summary": "Backend implementation prepared.",
+            "file_changes": [],
+        }),
     ]
 
     registry = MagicMock()
@@ -138,11 +144,11 @@ def test_workflow_automatically_builds_specialist_agents():
     assert result["execution_results"][0]["assigned_agent"] == "architect"
     assert result["execution_results"][1]["assigned_agent"] == "backend"
 
-    assert result["execution_results"][0]["output"]["content"] == (
+    assert result["execution_results"][0]["output"]["summary"] == (
         "Architecture design completed."
     )
 
-    assert result["execution_results"][1]["output"]["content"] == (
+    assert result["execution_results"][1]["output"]["summary"] == (
         "Backend implementation prepared."
     )
 
