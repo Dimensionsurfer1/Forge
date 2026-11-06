@@ -1,10 +1,12 @@
-﻿from langgraph.graph import END, START, StateGraph
+﻿
+from langgraph.graph import END, START, StateGraph
 
 from forge.core.state import WorkflowState
+from forge.model_router import ModelRouter
+from forge.orchestrator.planner import create_plan
 
 
 def initialize_workflow(state: WorkflowState) -> dict:
-    """Initialize a workflow and record its start."""
     return {
         "status": "running",
         "events": [
@@ -13,22 +15,16 @@ def initialize_workflow(state: WorkflowState) -> dict:
     }
 
 
-def planner_checkpoint(state: WorkflowState) -> dict:
-    """Temporary checkpoint until the AI Planner is connected."""
-    return {
-        "status": "paused",
-        "events": [
-            f"Task received by Planner stage: {state['task_request']}",
-            "Planner is waiting for AI model integration.",
-        ],
-    }
+def build_workflow(router: ModelRouter | None = None):
+    model_router = router or ModelRouter()
 
-
-def build_workflow():
     graph = StateGraph(WorkflowState)
 
     graph.add_node("initialize", initialize_workflow)
-    graph.add_node("planner", planner_checkpoint)
+    graph.add_node(
+        "planner",
+        lambda state: create_plan(state, model_router),
+    )
 
     graph.add_edge(START, "initialize")
     graph.add_edge("initialize", "planner")
