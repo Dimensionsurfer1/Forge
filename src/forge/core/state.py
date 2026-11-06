@@ -1,4 +1,5 @@
 ﻿from operator import add
+import operator
 from typing import Annotated, Any, Literal
 from typing_extensions import TypedDict
 
@@ -44,6 +45,10 @@ class WorkflowState(TypedDict):
     events: Annotated[list[str], add]
     pending_approvals: list[str]
 
+    execution_batches: Annotated[
+        list[list[dict[str, Any]]],
+        operator.add,
+    ]
 
 def create_workflow_state(
     project_id: str,
@@ -61,4 +66,5 @@ def create_workflow_state(
         "errors": [],
         "events": [],
         "pending_approvals": [],
+        "execution_batches": [],
     }
