@@ -44,6 +44,7 @@ class WorkflowState(TypedDict):
     errors: Annotated[list[str], add]
     events: Annotated[list[str], add]
     pending_approvals: list[str]
+    approval_ids: Annotated[list[str], operator.add]
 
     execution_results: Annotated[
         list[dict[str, Any]],
@@ -73,4 +74,5 @@ def create_workflow_state(
         "pending_approvals": [],
         "execution_batches": [],
         "execution_results": [],
+        "approval_ids": [],
     }

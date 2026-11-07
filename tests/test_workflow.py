@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from forge.core.approvals import ApprovalStore
 from forge.core.state import create_workflow_state
 from forge.orchestrator.executor import AgentExecutor
 from forge.orchestrator.workflow import build_workflow
@@ -61,7 +62,6 @@ def test_workflow_plans_schedules_and_executes():
     result = workflow.invoke(initial_state)
 
     assert result["status"] == "completed"
-
     assert len(result["tasks"]) == 2
     assert len(result["execution_batches"]) == 2
     assert len(result["execution_results"]) == 2
@@ -78,9 +78,7 @@ def test_workflow_plans_schedules_and_executes():
     router.chat.assert_called_once()
 
 
-def test_workflow_automatically_builds_specialist_agents():
-    from types import SimpleNamespace
-
+def test_workflow_automatically_builds_specialist_agents(tmp_path):
     router = MagicMock()
 
     router.select_model.side_effect = [
@@ -124,9 +122,15 @@ def test_workflow_automatically_builds_specialist_agents():
     registry = MagicMock()
     registry.get.return_value = SimpleNamespace(enabled=True)
 
+    # Create an isolated temporary project workspace.
+    projects_root = tmp_path / "projects"
+    project_directory = projects_root / "politag-mun-engine"
+    project_directory.mkdir(parents=True)
+
     workflow = build_workflow(
         router,
         registry=registry,
+        projects_root=projects_root,
         max_parallel_agents=3,
     )
 
@@ -154,3 +158,77 @@ def test_workflow_automatically_builds_specialist_agents():
 
     assert router.chat.call_count == 3
 
+
+def test_workflow_queues_agent_proposals_for_approval(tmp_path):
+
+    class MockExecutor:
+        max_parallel_agents = 3
+
+        def execute_batches(self, batches):
+            return [
+                {
+                    "task_id": "T1",
+                    "assigned_agent": "backend",
+                    "status": "completed",
+                    "output": {
+                        "task_id": "T1",
+                        "agent_id": "backend",
+                        "summary": "Create a backend entry point.",
+                        "proposed_changes": [
+                            {
+                                "path": "src/main.py",
+                                "operation": "create",
+                                "content": "print('Hello Forge')",
+                            }
+                        ],
+                        "changed_files": [],
+                    },
+                }
+            ]
+
+    router = MagicMock()
+    router.select_model.return_value = "local_qwen"
+
+    router.chat.return_value = json.dumps({
+        "summary": "Create a backend entry point.",
+        "tasks": [
+            {
+                "task_id": "T1",
+                "description": "Create the backend entry point.",
+                "assigned_agent": "backend",
+                "dependencies": [],
+                "priority": "high",
+                "status": "pending",
+            }
+        ],
+    })
+
+    store = ApprovalStore(tmp_path / "approvals.db")
+
+    workflow = build_workflow(
+        router,
+        executor=MockExecutor(),
+        approval_store=store,
+        max_parallel_agents=3,
+    )
+
+    initial_state = create_workflow_state(
+        project_id="politag-mun-engine",
+        workflow_id="approval-test-001",
+        task_request="Create a backend entry point.",
+    )
+
+    result = workflow.invoke(initial_state)
+
+    assert result["status"] == "awaiting_approval"
+    assert len(result["approval_ids"]) == 1
+
+    pending = store.list_pending(
+        project_id="politag-mun-engine"
+    )
+
+    assert len(pending) == 1
+    assert pending[0].task_id == "T1"
+    assert pending[0].agent_id == "backend"
+    assert pending[0].status == "pending"
+    assert pending[0].changes[0].path == "src/main.py"
