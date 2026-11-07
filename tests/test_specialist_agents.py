@@ -117,37 +117,12 @@ def test_agent_proposes_changes_without_writing(tmp_path):
     assert result["changed_files"] == []
     assert not (project / "src" / "main.py").exists()
 
-
-def test_agent_writes_only_when_explicitly_enabled(tmp_path):
-    projects_root = tmp_path / "projects"
-    project = projects_root / "demo"
-    project.mkdir(parents=True)
-
+def test_direct_agent_writes_are_rejected(tmp_path):
     router = MagicMock()
-    router.select_model.return_value = "cloud_coding"
-    router.chat.return_value = json.dumps({
-        "summary": "Created a starter module.",
-        "file_changes": [
-            {
-                "path": "src/main.py",
-                "operation": "create",
-                "content": "print('Hello Forge')",
-            }
-        ],
-    })
 
-    agent = ArchitectAgent(
-        router,
-        projects_root=projects_root,
-        allow_file_writes=True,
-    )
-
-    result = agent.execute({
-        **make_task(),
-        "project_id": "demo",
-    })
-
-    assert result["changed_files"] == ["src/main.py"]
-    assert (project / "src" / "main.py").read_text(
-        encoding="utf-8"
-    ) == "print('Hello Forge')"
+    with pytest.raises(ValueError, match="Direct agent writes are disabled"):
+        ArchitectAgent(
+            router,
+            projects_root=tmp_path,
+            allow_file_writes=True,
+        )

@@ -62,6 +62,8 @@ class ProjectWorkspace:
 
         self.max_file_size = max_file_size
 
+        self.project_id = project_id
+
     @staticmethod
     def _is_inside(path: Path, parent: Path) -> bool:
         try:

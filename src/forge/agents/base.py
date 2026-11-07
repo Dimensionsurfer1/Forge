@@ -21,7 +21,9 @@ class AgentWorkProduct(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str
-    file_changes: list[ProposedFileChange] = Field(default_factory=list)
+    file_changes: list[ProposedFileChange] = Field(
+        default_factory=list
+    )
 
 
 class SpecialistAgent:
@@ -36,18 +38,26 @@ class SpecialistAgent:
         allow_file_writes: bool = False,
     ):
         self.router = router
+
         self.projects_root = (
             Path(projects_root).resolve()
             if projects_root is not None
             else None
         )
-        self.allow_file_writes = allow_file_writes
+
+        if allow_file_writes:
+            raise ValueError(
+                "Direct agent writes are disabled. "
+                "Use ApprovalStore to approve and apply changes."
+            )
+
+        self.allow_file_writes = False
 
     def _get_workspace_context(
         self,
         workspace: ProjectWorkspace,
     ) -> dict[str, str]:
-        """Read a small, bounded snapshot of project text files."""
+        """Read a bounded snapshot of project text files."""
 
         supported_extensions = {
             ".py", ".md", ".yaml", ".yml", ".toml",
@@ -59,7 +69,10 @@ class SpecialistAgent:
         total_chars = 0
 
         for relative_path in workspace.list_files(max_files=100):
-            if Path(relative_path).suffix.lower() not in supported_extensions:
+            if (
+                Path(relative_path).suffix.lower()
+                not in supported_extensions
+            ):
                 continue
 
             if len(snapshot) >= 20 or total_chars >= 20_000:
@@ -71,6 +84,7 @@ class SpecialistAgent:
                 continue
 
             content = content[:4_000]
+
             remaining = 20_000 - total_chars
             content = content[:remaining]
 
@@ -82,7 +96,12 @@ class SpecialistAgent:
 
         return snapshot
 
-    def execute(self, task: dict[str, Any]) -> dict[str, Any]:
+    def execute(
+        self,
+        task: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute a specialist task and return proposed changes."""
+
         task_id = task.get("task_id")
         description = task.get("description")
 
@@ -90,21 +109,30 @@ class SpecialistAgent:
             raise ValueError("Task must have a valid task_id.")
 
         if not isinstance(description, str) or not description.strip():
-            raise ValueError(f"Task '{task_id}' has no description.")
+            raise ValueError(
+                f"Task '{task_id}' has no description."
+            )
 
         project_id = task.get("project_id")
         workspace_context: dict[str, str] = {}
 
+        # Load the assigned project's workspace.
         if self.projects_root is not None:
             if not isinstance(project_id, str) or not project_id.strip():
-                raise ValueError("Task must identify its project.")
+                raise ValueError(
+                    "Task must identify its project."
+                )
 
             workspace = ProjectWorkspace(
                 projects_root=self.projects_root,
                 project_id=project_id,
             )
-            workspace_context = self._get_workspace_context(workspace)
 
+            workspace_context = self._get_workspace_context(
+                workspace
+            )
+
+        # Select the appropriate model.
         model_id = self.router.select_model(self.task_type)
 
         output_schema = json.dumps(
@@ -121,10 +149,13 @@ class SpecialistAgent:
                     "Use the supplied project files as the source of truth.\n"
                     "Return ONLY valid JSON matching this schema:\n"
                     f"{output_schema}\n"
-                    "For every file change, provide its relative path, "
-                    "operation (create or update), and complete file content.\n"
+                    "For every proposed file change, provide:\n"
+                    "- Relative file path\n"
+                    "- Operation: create or update\n"
+                    "- Complete file content\n\n"
                     "Do not use absolute paths or paths containing '..'.\n"
-                    "Do not claim that a file was changed."
+                    "Do not claim that files were modified.\n"
+                    "Your changes are proposals and require human approval."
                 ),
             },
             {
@@ -145,59 +176,67 @@ class SpecialistAgent:
             max_tokens=6000,
         )
 
+        # Validate the model's response.
         try:
-            work_product = AgentWorkProduct.model_validate_json(response)
+            work_product = AgentWorkProduct.model_validate_json(
+                response
+            )
         except Exception as error:
             raise ValueError(
-                f"Agent '{self.agent_id}' returned an invalid work product."
+                f"Agent '{self.agent_id}' returned an invalid "
+                "work product."
             ) from error
 
-        changed_files: list[str] = []
         proposed_changes = [
             change.model_dump()
             for change in work_product.file_changes
         ]
 
-        paths = [change["path"] for change in proposed_changes]
+        # Reject duplicate paths.
+        paths = [
+            change["path"]
+            for change in proposed_changes
+        ]
 
         if len(paths) != len(set(paths)):
-            raise ValueError("Agent returned duplicate file paths.")
+            raise ValueError(
+                "Agent returned duplicate file paths."
+            )
 
+        # File changes require an assigned project workspace.
         if proposed_changes and self.projects_root is None:
             raise ValueError(
                 "File changes require an assigned project workspace."
             )
 
+        # Validate every proposed operation.
+        # No files are written here.
         if self.projects_root is not None:
             workspace = ProjectWorkspace(
                 projects_root=self.projects_root,
                 project_id=project_id,
             )
 
-            # Validate every proposed operation before applying any changes.
             for change in proposed_changes:
                 path = change["path"]
-                target = workspace.validate_file_path(change["path"])
+
+                target = workspace.validate_file_path(path)
                 exists = target.exists()
-                
 
                 if change["operation"] == "create" and exists:
                     raise ValueError(
-                        f"Cannot create '{path}': file already exists."
+                        f"Cannot create '{path}': "
+                        "file already exists."
                     )
 
                 if change["operation"] == "update" and not exists:
                     raise ValueError(
-                        f"Cannot update '{path}': file does not exist."
+                        f"Cannot update '{path}': "
+                        "file does not exist."
                     )
 
-            if self.allow_file_writes:
-                for change in proposed_changes:
-                    workspace.write_file(
-                        change["path"],
-                        change["content"],
-                    )
-                    changed_files.append(change["path"])
+        # Agents never apply changes directly.
+        changed_files: list[str] = []
 
         return {
             "task_id": task_id,
