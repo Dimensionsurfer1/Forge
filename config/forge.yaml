@@ -21,7 +21,7 @@ models:
 storage:
   database: runtime/database/forge.db
   logs: runtime/logs
-  projects: projects
+  projects: ${FORGE_PROJECTS_ROOT}
 
 integrations:
   graphify:
