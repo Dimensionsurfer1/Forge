@@ -119,3 +119,35 @@ def test_invalid_create_operation_is_rejected(
 
     with pytest.raises(ValueError, match="already exists"):
         store.apply_approved(request.approval_id, workspace)
+
+def test_invalid_change_prevents_entire_batch(setup_approval):
+    store, workspace, request, project = setup_approval
+
+    batch = store.create_request(
+        project_id="demo",
+        task_id="T2",
+        agent_id="backend",
+        summary="Create two files.",
+        changes=[
+            {
+                "path": "src/first.py",
+                "operation": "create",
+                "content": "print('First')",
+            },
+            {
+                "path": "src/missing.py",
+                "operation": "update",
+                "content": "print('Second')",
+            },
+        ],
+    )
+
+    store.decide(batch.approval_id, "approved")
+
+    with pytest.raises(ValueError, match="does not exist"):
+        store.apply_approved(batch.approval_id, workspace)
+
+    assert not (project / "src" / "first.py").exists()
+    assert batch.status == "pending" or store.get(
+        batch.approval_id
+    ).status == "approved"
