@@ -10,6 +10,7 @@ from forge.core.approvals import ApprovalRequest, ApprovalStore
 from forge.core.config import load_forge_config
 from forge.core.workspace import ProjectWorkspace
 
+from fastapi.middleware.cors import CORSMiddleware
 
 class ApprovalDecision(BaseModel):
     decision: Literal["approved", "rejected"]
@@ -23,6 +24,14 @@ def create_app(
         title="Forge API",
         version="0.1.0",
         description="Forge approval management API",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/health")
