@@ -57,3 +57,6 @@ dist/
 # Agent-generated temporary work
 .worktrees/
 '@ | Set-Content -Encoding utf8 .gitignore
+
+# Managed projects stay outside the Forge repository
+projects/
